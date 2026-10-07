@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Merger Tool - Ordine Partitura Finale</title>
+    <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+    
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --bg: #f8fafc;
+            --card-bg: #ffffff;
+            --border: #e2e8f0;
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+            --badge-bg: #eff6ff;
+            --badge-text: #1d4ed8;
+            --badge-score-bg: #fef3c7;
+            --badge-score-text: #92400e;
+        }
+
+        * { box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            max-width: 820px; 
+            margin: 30px auto; 
+            padding: 0 16px;
+            color: var(--text-main);
+            background: var(--bg); 
+            line-height: 1.5;
+        }
+
+        .container { 
+            background: var(--card-bg); 
+            padding: 28px; 
+            border-radius: 12px; 
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06); 
+            border: 1px solid var(--border);
+        }
+
+        h2 { margin-top: 0; margin-bottom: 8px; color: #0f172a; }
+        .subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 20px; }
+
+        .dropzone {
+            border: 2px dashed #cbd5e1;
+            border-radius: 10px;
+            padding: 24px;
+            text-align: center;
+            background: #f8fafc;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-bottom: 20px;
+        }
+        .dropzone:hover, .dropzone.dragover {
+            border-color: var(--primary);
+            background: #eff6ff;
+        }
+        .dropzone p { margin: 6px 0 0; color: var(--text-muted); font-size: 13px; }
+
+        .actions-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+        .file-counter {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-muted);
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 8px;
+        }
+
+        button { 
+            background: var(--primary); 
+            color: white; 
+            border: none; 
+            padding: 9px 16px; 
+            border-radius: 6px; 
+            cursor: pointer; 
+            font-size: 14px; 
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: background 0.15s ease;
+        }
+        button:hover { background: var(--primary-hover); }
+        button:disabled { background: #cbd5e1; cursor: not-allowed; }
+
+        button.btn-secondary {
+            background: #f1f5f9;
+            color: #334155;
+            border: 1px solid var(--border);
+        }
+        button.btn-secondary:hover {
+            background: #e2e8f0;
+        }
+
+        #file-list { 
+            list-style: none; 
+            padding: 0; 
+            margin: 15px 0 25px; 
+            border: 1px solid var(--border); 
+            border-radius: 8px;
+            max-height: 520px;
+            overflow-y: auto;
+            background: #fff;
+        }
+        #file-list:empty {
+            display: none;
+        }
+
+        .file-item { 
+            background: #fff; 
+            border-bottom: 1px solid var(--border); 
+            padding: 10px 14px; 
+            cursor: grab; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center;
+            transition: background 0.15s;
+        }
+        .file-item:last-child { border-bottom: none; }
+        .file-item:hover { background: #f8fafc; }
+        .file-item:active { cursor: grabbing; }
+
+        .file-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-align: left;
+            overflow: hidden;
+        }
+        .file-order {
+            font-weight: 700;
+            font-size: 13px;
+            color: #94a3b8;
+            min-width: 24px;
+        }
+        .file-name {
+            font-size: 14px;
+            font-weight: 500;
+            color: #1e293b;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 440px;
+        }
+        .file-badge {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 4px;
+            background: var(--badge-bg);
+            color: var(--badge-text);
+            white-space: nowrap;
+        }
+        .file-badge.badge-score {
+            background: var(--badge-score-bg);
+            color: var(--badge-score-text);
+        }
+
+        .remove-btn { 
+            color: #94a3b8; 
+            cursor: pointer; 
+            font-weight: bold; 
+            padding: 4px 8px;
+            border-radius: 4px;
+            transition: all 0.15s;
+        }
+        .remove-btn:hover { 
+            color: #ef4444; 
+            background: #fee2e2;
+        }
+
+        .merge-btn-container {
+            text-align: center;
+            padding-top: 10px;
+        }
+        #merge-btn {
+            padding: 12px 28px;
+            font-size: 16px;
+            border-radius: 8px;
+            margin: 0 auto;
+        }
+
+        /* Guida all'ordine prestabilito */
+        .info-card {
+            margin-top: 30px;
+            background: #f8fafc;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            text-align: left;
+            font-size: 13px;
+            overflow: hidden;
+        }
+        .info-header {
+            padding: 12px 16px;
+            background: #f1f5f9;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            user-select: none;
+        }
+        .info-content {
+            padding: 14px 16px;
+            display: none;
+        }
+        .info-card.open .info-content {
+            display: block;
+        }
+        .order-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .order-table th, .order-table td {
+            padding: 6px 10px;
+            border-bottom: 1px solid var(--border);
+            vertical-align: top;
+        }
+        .order-table th { color: #475569; font-weight: 600; text-align: left; }
+        .order-table td.cat-name { font-weight: 600; color: #0f172a; width: 30%; }
+        .order-table td.cat-keywords { color: #64748b; font-family: monospace; font-size: 12px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Unisci i tuoi PDF (Partitura & Parti)</h2>
+    <div class="subtitle">La partitura completa va in cima, seguita dalle parti ordinate secondo l'organico di partitura (Finale 27). Trascina gli elementi per personalizzare l'ordine in qualsiasi momento.</div>
+    
+    <input type="file" id="file-input" accept="application/pdf" multiple style="display:none">
+    
+    <div class="dropzone" id="dropzone" onclick="document.getElementById('file-input').click()">
+        <strong>📁 Clicca per selezionare i PDF</strong> o trascinali qui dentro
+        <p>Supporta selezione multipla e drag & drop</p>
+    </div>
+
+    <div class="actions-bar" id="actions-bar" style="display:none;">
+        <span class="file-counter" id="file-counter">0 file caricati</span>
+        <div class="btn-group">
+            <button class="btn-secondary" type="button" onclick="resetToAutoOrder()" title="Ripristina l'ordine secondo l'organico prestabilito">
+                ↺ Riordina Automaticamente
+            </button>
+            <button class="btn-secondary" type="button" onclick="clearAllFiles()" title="Rimuovi tutti i file">
+                ✕ Svuota
+            </button>
+        </div>
+    </div>
+    
+    <ul id="file-list"></ul>
+    
+    <div id="filename-bar" style="display:none; margin: 15px 0 20px; text-align: left;">
+        <label for="output-filename-input" style="font-size: 13px; font-weight: 600; color: #475569; display: block; margin-bottom: 6px;">
+            Nome del file unito:
+        </label>
+        <input type="text" id="output-filename-input" 
+            oninput="this.dataset.userEdited = 'true'"
+            style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; font-weight: 500; color: #1e293b;">
+    </div>
+    
+    <div class="merge-btn-container">
+        <button id="merge-btn" disabled onclick="mergePdfs()">Unisci e Salva PDF</button>
+    </div>
+
+    <div class="info-card open" id="info-card">
+        <div class="info-header" onclick="toggleInfo()">
+            <span>📋 Ordine Prestabilito & Parole Chiave (Finale 27)</span>
+            <span id="info-toggle-icon">▲</span>
+        </div>
+        <div class="info-content">
+            <table class="order-table">
+                <thead>
+                    <tr>
+                        <th>Ordine Sezione</th>
+                        <th>Parole chiave riconosciute (Finale 27 / Italiano / Inglese)</th>
+                    </tr>
+                </thead>
+                <tbody id="rules-table-body">
+                    <!-- Popolato dinamicamente da JS -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Configurazione Gerarchia & Parole Chiave (Finale 27)
+    const INSTRUMENT_RULES = [
+        {
+            category: "0. Partitura (in cima)",
+            label: "Partitura",
+            priority: 0,
+            subRules: [
+                { name: "Partitura / Score", sub: 1, regex: /\b(partitura|full\s*score|score|conductor|conduttore|direzione|partitur)\b/i },
+                { name: "File Titolo (senza strumento, es. Ballo Ballo 1.pdf)", sub: 2, regex: /__SCORE_TITLE__/ }
+            ]
+        },
+        {
+            category: "1. Voci",
+            label: "Voci",
+            priority: 100,
+            subRules: [
+                { name: "Voce Solista", sub: 1, regex: /\b(voice|solo\s*voice|voce|voci|vocal|vocals|canto|cantante|solista)\b/i },
+                { name: "Coro", sub: 2, regex: /\b(choir|chorus|coro|satb)\b/i }
+            ]
+        },
+        {
+            category: "2. Flauti",
+            label: "Flauti",
+            priority: 200,
+            subRules: [
+                { name: "Ottavino", sub: 1, regex: /\b(piccolo|ottavino)\b/i },
+                { name: "Flauto", sub: 2, regex: /\b(flute|flauto|flauti|alto\s*flute|bass\s*flute)\b/i }
+            ]
+        },
+        {
+            category: "3. Ance doppie",
+            label: "Ance doppie",
+            priority: 300,
+            subRules: [
+                { name: "Oboe / Corno Inglese", sub: 1, regex: /\b(oboe|oboes|english\s*horn|cor\s*anglais|corno\s*inglese)\b/i },
+                { name: "Fagotto / Controfagotto", sub: 2, regex: /\b(bassoon|fagotto|fagotti|contrabassoon|controfagotto)\b/i }
+            ]
+        },
+        {
+            category: "4. Clarinetti",
+            label: "Clarinetti",
+            priority: 400,
+            subRules: [
+                { name: "Clarinetto Mib", sub: 1, regex: /\b(clarinet.*(eb|mib)|(eb|mib).*clarinet|clarinetto.*piccolo|piccolo\s*clarinet)\b/i },
+                { name: "Clarinetto Sib / Standard", sub: 2, regex: /\b(clarinet.*(bb|sib)|(bb|sib).*clarinet|clarinet(to)?|clarinetti)\b/i },
+                { name: "Clarinetto Basso", sub: 3, regex: /\b(bass.*clarinet|clarinetto.*basso|contrabass.*clarinet|contra-alto.*clarinet)\b/i }
+            ]
+        },
+        {
+            category: "5. Sassofoni",
+            label: "Sassofoni",
+            priority: 500,
+            subRules: [
+                { name: "Sax Soprano", sub: 1, regex: /\b(soprano.*sax|sax.*soprano|sopranino.*sax)\b/i },
+                { name: "Sax Alto", sub: 2, regex: /\b(alto.*sax|sax.*alto|contralto.*sax|sax.*contralto)\b/i },
+                { name: "Sax Tenore", sub: 3, regex: /\b(tenor.*sax|sax.*tenore)\b/i },
+                { name: "Sax Baritono", sub: 4, regex: /\b(baritone.*sax|sax.*baritono|bari.*sax)\b/i },
+                { name: "Sax Basso", sub: 5, regex: /\b(bass.*sax|sax.*basso)\b/i },
+                { name: "Sax Generico", sub: 6, regex: /\b(sax|saxophone|sassofono)\b/i }
+            ]
+        },
+        {
+            category: "6. Corni",
+            label: "Corni",
+            priority: 600,
+            subRules: [
+                { name: "Corno in Fa", sub: 1, regex: /\b(horn\s*in\s*f|f\s*horn|french\s*horn|corno\s*in\s*fa|corno|corni|horn|horns)\b/i }
+            ]
+        },
+        {
+            category: "7. Trombe",
+            label: "Trombe",
+            priority: 700,
+            subRules: [
+                { name: "Tromba / Cornetta / Flicorno", sub: 1, regex: /\b(trumpet|tromba|trombe|cornet|cornetta|cornette|flugelhorn|flügelhorn|flicorno\s*soprano)\b/i }
+            ]
+        },
+        {
+            category: "8. Tromboni",
+            label: "Tromboni",
+            priority: 800,
+            subRules: [
+                { name: "Trombone Tenore / Std", sub: 1, regex: /\b(tenor\s*trombone|trombone|tromboni)\b/i },
+                { name: "Trombone Basso", sub: 2, regex: /\b(bass\s*trombone|trombone\s*basso)\b/i }
+            ]
+        },
+        {
+            category: "9. Eufonio",
+            label: "Eufonio",
+            priority: 900,
+            subRules: [
+                { name: "Eufonio / Baritono", sub: 1, regex: /\b(euphonium|eufonio|baritone\s*horn|baritone\s*b\.?c\.?|baritone\s*t\.?c\.?|flicorno\s*baritono|flicorno\s*tenore)\b/i }
+            ]
+        },
+        {
+            category: "10. Tuba",
+            label: "Tuba",
+            priority: 1000,
+            subRules: [
+                { name: "Tuba / Bassotuba", sub: 1, regex: /\b(tuba|bass\s*tuba|bassotuba|sousaphone|bassi)\b/i }
+            ]
+        },
+        {
+            category: "11. Corde & Basso Elettrico",
+            label: "Corde Pizzicate / Basso",
+            priority: 1100,
+            subRules: [
+                { name: "Arpa", sub: 1, regex: /\b(harp|arpa)\b/i },
+                { name: "Chitarra", sub: 2, regex: /\b(acoustic\s*guitar|electric\s*guitar|guitar|chitarra)\b/i },
+                { name: "Basso Elettrico / Contrabbasso", sub: 3, regex: /\b(electric\s*bass|basso\s*elettrico|bass\s*guitar|string\s*bass|double\s*bass|contrabbasso)\b/i }
+            ]
+        },
+        {
+            category: "12. Tastiere",
+            label: "Tastiere",
+            priority: 1200,
+            subRules: [
+                { name: "Pianoforte / Tastiere / Organo", sub: 1, regex: /\b(piano|pianoforte|keyboard|tastiera|tastiere|organ|organo|synth|synthesizer|celesta|harpsichord|clavicembalo)\b/i }
+            ]
+        },
+        {
+            category: "13. Percussioni Determinate",
+            label: "Percussioni Determinate",
+            priority: 1300,
+            subRules: [
+                { name: "Mallet / Glockenspiel / Vibrafono", sub: 1, regex: /\b(glockenspiel|mallet|mallets|vibraphone|vibrafono|xylophone|xilofono|marimba|tubular\s*bells|campane\s*tubolari|chimes|crotales|campanelli)\b/i },
+                { name: "Timpani", sub: 2, regex: /\b(timpani|timpany|kettledrums)\b/i }
+            ]
+        },
+        {
+            category: "14. Percussioni Indeterminate",
+            label: "Percussioni Indeterminate",
+            priority: 1400,
+            subRules: [
+                { name: "Batteria (Drum Set)", sub: 1, regex: /\b(drum\s*set|drums|drum\s*kit|batteria)\b/i },
+                { name: "Percussioni / Accessori", sub: 2, regex: /\b(percussion|percussioni|accessories|accessori|snare|rullante|cymbals|piatti|grancassa|bass\s*drum|tambourine|tamburello|triangle|triangolo|congas|bongos|timbales|shaker|claves|castanets|wood\s*block|gong|tam-tam)\b/i }
+            ]
+        },
+        {
+            category: "15. Il resto in coda",
+            label: "Altro / Coda",
+            priority: 1500,
+            subRules: [
+                { name: "Parti residue non riconosciute", sub: 1, regex: /.*/i }
+            ]
+        }
+    ];
+
+    let selectedFiles = [];
+    const fileInput = document.getElementById('file-input');
+    const fileListElement = document.getElementById('file-list');
+    const mergeBtn = document.getElementById('merge-btn');
+    const dropzone = document.getElementById('dropzone');
+    const actionsBar = document.getElementById('actions-bar');
+    const fileCounter = document.getElementById('file-counter');
+
+    function populateRulesTable() {
+        const tbody = document.getElementById('rules-table-body');
+        tbody.innerHTML = '';
+        INSTRUMENT_RULES.forEach(r => {
+            const tr = document.createElement('tr');
+            const keywordsText = r.subRules.map(s => {
+                const src = s.regex.source === '__SCORE_TITLE__' 
+                    ? 'Nome opera senza suffisso parte (es. Ballo Ballo 1.pdf)' 
+                    : s.regex.source;
+                return `<strong>${s.name}</strong>: <code>${src}</code>`;
+            }).join('<br>');
+            tr.innerHTML = `<td class="cat-name">${r.category}</td><td class="cat-keywords">${keywordsText}</td>`;
+            tbody.appendChild(tr);
+        });
+    }
+    populateRulesTable();
+
+    function toggleInfo() {
+        const card = document.getElementById('info-card');
+        const icon = document.getElementById('info-toggle-icon');
+        card.classList.toggle('open');
+        icon.innerText = card.classList.contains('open') ? '▲' : '▼';
+    }
+
+    const sortable = new Sortable(fileListElement, {
+        animation: 150,
+        onEnd: () => {
+            const newOrder = Array.from(fileListElement.children).map(li => li.dataset.id);
+            selectedFiles.sort((a, b) => newOrder.indexOf(a.id) - newOrder.indexOf(b.id));
+            renderFileList();
+        }
+    });
+
+    // Funzione atomica di classificazione
+    function classifyFile(fileName, allNames = []) {
+        const clean = fileName.replace(/\.pdf$/i, '').trim().toLowerCase();
+
+        // 0. Partitura in cima (esplicita o file titolo senza trattino)
+        if (/\b(partitura|full\s*score|score|conductor|conduttore|direzione|partitur)\b/i.test(clean)) {
+            return { rank: 10, label: "Partitura", isScore: true };
+        }
+        if (!fileName.includes(' - ')) {
+            // Controlla se altre parti iniziano con questo titolo + " - "
+            const isBaseTitle = allNames.some(name => 
+                name !== fileName && name.toLowerCase().startsWith(clean + ' - ')
+            );
+            if (isBaseTitle || allNames.length <= 1) {
+                return { rank: 20, label: "Partitura (Titolo)", isScore: true };
+            }
+        }
+
+        // Risolvi ambiguità prioritarie
+        if (/\b(electric\s*bass|basso\s*elettrico|bass\s*guitar)\b/i.test(clean)) {
+            return { rank: 1130, label: "Basso Elettrico" };
+        }
+        if (/\b(bass.*clarinet|clarinetto.*basso|contrabass.*clarinet)\b/i.test(clean)) {
+            return { rank: 430, label: "Clarinetto Basso" };
+        }
+        if (/\b(bass\s*trombone|trombone\s*basso)\b/i.test(clean)) {
+            return { rank: 820, label: "Trombone Basso" };
+        }
+        if (/\b(bassoon|fagotto|fagotti|contrabassoon|controfagotto)\b/i.test(clean)) {
+            return { rank: 320, label: "Fagotto" };
+        }
+        if (/\b(baritone\s*sax|sax\s*baritono|bari\s*sax)\b/i.test(clean)) {
+            return { rank: 540, label: "Sax Baritono" };
+        }
+        if (/\b(english\s*horn|corno\s*inglese|cor\s*anglais)\b/i.test(clean)) {
+            return { rank: 310, label: "Corno Inglese" };
+        }
+
+        // Controllo regole gerarchiche (dalla categoria 1 alla 14)
+        for (let i = 1; i < INSTRUMENT_RULES.length - 1; i++) {
+            const cat = INSTRUMENT_RULES[i];
+            for (const sub of cat.subRules) {
+                if (sub.regex.test(clean)) {
+                    return { 
+                        rank: cat.priority + (sub.sub * 10), 
+                        label: `${cat.label} (${sub.name})` 
+                    };
+                }
+            }
+        }
+
+        return { rank: 1500, label: "Altro / Coda" };
+    }
+
+    function compareFiles(a, b) {
+        if (a.rank !== b.rank) {
+            return a.rank - b.rank;
+        }
+        return a.file.name.localeCompare(b.file.name, undefined, { numeric: true, sensitivity: 'base' });
+    }
+
+    function addFiles(newFiles) {
+        const validFiles = newFiles.filter(f => f.name.toLowerCase().endsWith('.pdf'));
+        const allNames = selectedFiles.map(f => f.file.name).concat(validFiles.map(f => f.name));
+
+        validFiles.forEach(file => {
+            const id = Math.random().toString(36).substr(2, 9);
+            selectedFiles.push({ id, file, rank: 9999, label: "" });
+        });
+
+        // Ricalcola i rank con il contesto di tutti i file per rilevare il titolo partitura
+        const currentNames = selectedFiles.map(f => f.file.name);
+        selectedFiles.forEach(item => {
+            const info = classifyFile(item.file.name, currentNames);
+            item.rank = info.rank;
+            item.label = info.label;
+            item.isScore = !!info.isScore;
+        });
+
+        selectedFiles.sort(compareFiles);
+        renderFileList();
+        updateUI();
+    }
+
+    function resetToAutoOrder() {
+        const currentNames = selectedFiles.map(f => f.file.name);
+        selectedFiles.forEach(item => {
+            const info = classifyFile(item.file.name, currentNames);
+            item.rank = info.rank;
+            item.label = info.label;
+            item.isScore = !!info.isScore;
+        });
+        selectedFiles.sort(compareFiles);
+        renderFileList();
+    }
+
+    function clearAllFiles() {
+        selectedFiles = [];
+        renderFileList();
+        updateUI();
+    }
+
+    function removeFile(id) {
+        selectedFiles = selectedFiles.filter(f => f.id !== id);
+        renderFileList();
+        updateUI();
+    }
+
+    function renderFileList() {
+        fileListElement.innerHTML = '';
+        selectedFiles.forEach((item, index) => {
+            const li = document.createElement('li');
+            li.className = 'file-item';
+            li.dataset.id = item.id;
+            const badgeClass = item.isScore ? 'file-badge badge-score' : 'file-badge';
+            li.innerHTML = `
+                <div class="file-info">
+                    <span class="file-order">${index + 1}.</span>
+                    <span class="${badgeClass}">${item.label}</span>
+                    <span class="file-name" title="${item.file.name}">📄 ${item.file.name}</span>
+                </div>
+                <span class="remove-btn" onclick="removeFile('${item.id}')" title="Rimuovi">✕</span>
+            `;
+            fileListElement.appendChild(li);
+        });
+    }
+
+    function detectPieceTitle() {
+        if (selectedFiles.length === 0) return "DOCUMENTO";
+        const scoreItem = selectedFiles.find(f => f.isScore && !f.file.name.includes(' - '));
+        if (scoreItem) {
+            return scoreItem.file.name.replace(/\.pdf$/i, '').trim();
+        }
+        const prefixCount = {};
+        selectedFiles.forEach(item => {
+            const m = item.file.name.match(/^(.*?)\s*-\s*/);
+            if (m) {
+                const pref = m[1].trim();
+                prefixCount[pref] = (prefixCount[pref] || 0) + 1;
+            }
+        });
+        let best = null, maxCount = 0;
+        for (const [pref, count] of Object.entries(prefixCount)) {
+            if (count > maxCount) {
+                maxCount = count;
+                best = pref;
+            }
+        }
+        if (best) return best;
+        return selectedFiles[0].file.name.replace(/\.pdf$/i, '').trim();
+    }
+
+    function updateOutputFileNameInput() {
+        const input = document.getElementById('output-filename-input');
+        if (input && !input.dataset.userEdited) {
+            const title = detectPieceTitle();
+            input.value = `${title} - COMPLETO.pdf`;
+        }
+    }
+
+    function updateUI() {
+        const count = selectedFiles.length;
+        fileCounter.innerText = `${count} file ${count === 1 ? 'caricato' : 'caricati'}`;
+        actionsBar.style.display = count > 0 ? 'flex' : 'none';
+        document.getElementById('filename-bar').style.display = count > 0 ? 'block' : 'none';
+        mergeBtn.disabled = count < 2;
+        updateOutputFileNameInput();
+    }
+
+    dropzone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropzone.classList.add('dragover');
+    });
+    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+    dropzone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropzone.classList.remove('dragover');
+        if (e.dataTransfer.files.length > 0) {
+            addFiles(Array.from(e.dataTransfer.files));
+        }
+    });
+
+    fileInput.addEventListener('change', (e) => {
+        const files = Array.from(e.target.files);
+        addFiles(files);
+        fileInput.value = '';
+    });
+
+    async function mergePdfs() {
+        mergeBtn.innerText = "Elaborazione...";
+        mergeBtn.disabled = true;
+
+        const filenameInput = document.getElementById('output-filename-input');
+        let outputFilename = (filenameInput && filenameInput.value.trim()) || `${detectPieceTitle()} - COMPLETO.pdf`;
+        if (!outputFilename.toLowerCase().endsWith('.pdf')) {
+            outputFilename += '.pdf';
+        }
+
+        try {
+            const mergedPdf = await PDFLib.PDFDocument.create();
+
+            for (const fileObj of selectedFiles) {
+                const arrayBuffer = await fileObj.file.arrayBuffer();
+                const pdf = await PDFLib.PDFDocument.load(arrayBuffer);
+                const copiedPages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
+                copiedPages.forEach((page) => mergedPdf.addPage(page));
+            }
+
+            const pdfBytes = await mergedPdf.save();
+
+            let savedDirectly = false;
+            if (window.showSaveFilePicker) {
+                try {
+                    const handle = await window.showSaveFilePicker({
+                        suggestedName: outputFilename,
+                        types: [{
+                            description: 'File PDF',
+                            accept: { 'application/pdf': ['.pdf'] }
+                        }]
+                    });
+                    const writable = await handle.createWritable();
+                    await writable.write(pdfBytes);
+                    await writable.close();
+                    savedDirectly = true;
+                } catch (pickerErr) {
+                    if (pickerErr.name === 'AbortError') {
+                        return; // L'utente ha annullato il salvataggio
+                    }
+                }
+            }
+
+            if (!savedDirectly) {
+                download(pdfBytes, outputFilename, "application/pdf");
+            }
+        } catch (error) {
+            console.error(error);
+            alert("Si è verificato un errore durante l'unione dei PDF.");
+        } finally {
+            mergeBtn.innerText = "Unisci e Scarica PDF";
+            updateUI();
+        }
+    }
+
+    function download(data, filename, type) {
+        const file = new Blob([data], { type: type });
+        const a = document.createElement("a");
+        const url = URL.createObjectURL(file);
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        }, 0);
+    }
+</script>
+
+</body>
+</html>
